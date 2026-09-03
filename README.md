@@ -8,7 +8,7 @@
 
 > ⚠️ Repositório de **portfólio**: descreve arquitetura e resultados. Não contém código proprietário nem credenciais.
 
-## 💰 Resultado de destaque
+## Resultado de destaque 💰
 
 > **R$ 200.000,00 em prejuízo com fraude evitado** graças à ferramenta de prevenção desenvolvida para a operação.
 
