@@ -6,7 +6,7 @@
 ![SQL Server](https://img.shields.io/badge/SQL%20Server-T--SQL-CC2927?style=flat-square&logo=microsoftsqlserver&logoColor=white)
 ![IA](https://img.shields.io/badge/IA-Classificação-0ea5e9?style=flat-square)
 
-> ⚠️ Repositório de **portfólio**: descreve arquitetura e resultados. Não contém código proprietário nem credenciais.
+> ⚠️ Repositório de **estudo de caso**: descreve arquitetura, resultados e técnicas reais — sem código proprietário nem credenciais. Os trechos abaixo são **reescritos, ilustrativos**.
 
 ## Resultado de destaque 💰
 
@@ -14,21 +14,47 @@
 
 ## O problema
 
-Uma operação de varejo com alto volume de transações precisava **triar rapidamente** casos suspeitos, distribuir a carga entre analistas e padronizar o desfecho de cada atendimento (fraude x desacordo comercial) — reduzindo perdas e acelerando a resposta.
+Uma operação de varejo com alto volume de transações precisava **triar rapidamente** casos suspeitos, **distribuir a carga** entre analistas e padronizar o desfecho de cada atendimento (fraude × desacordo comercial) — reduzindo perdas e acelerando a resposta.
+
+## Fluxo
+
+```mermaid
+flowchart LR
+  B[Base importada] --> D[Distribuição entre analistas]
+  D --> A[Atendimento Base do analista]
+  A --> C{Classificação}
+  C -->|IA sugere| FR[Fraude]
+  C -->|IA sugere| DC[Desacordo Comercial]
+```
 
 ## O que eu construí / evoluí
 
 - **Distribuição de bases entre analistas** — vincular/desvincular casos a partir da lista de usuários liberados, com processamento otimizado no banco.
-- **Atendimento Base** — fila dos casos pendentes de cada analista, com critérios de "não finalizado".
-- **IA de classificação** — apoio à triagem de **Desacordo Comercial**, acelerando a decisão do analista.
-- **Integração com status de agentes (Genesys)** — carga e tratamento dos estados de operação.
-- **Visibilidade de menu por perfil** — analista x administrador.
+- **Atendimento Base** — fila dos casos pendentes de cada analista.
+- **IA de classificação** — apoio à triagem de **Desacordo Comercial**, acelerando a decisão.
+- **Integração com status de agentes (Genesys)** e **visibilidade de menu por perfil** (analista × admin).
 
-## Destaques de engenharia
+## 🔧 Técnica em destaque (reescrita de forma ilustrativa)
 
-- Substituição de `STRING_SPLIT` por _split_ via XML nas _procedures_ de vínculo (compatibilidade e performance).
-- Tratamento robusto de dados na carga (durações, _encoding_ UTF-8 com BOM, conversões).
-- Controle de acesso por perfil aplicado no menu e nas rotas.
+**Distribuir N casos entre M analistas de uma vez, sem cursor.** O gargalo era vincular listas grandes; a chave foi fazer o _split_ da lista de analistas via XML e distribuir com `NTILE`/`ROW_NUMBER` em _set-based SQL_ (em vez de laço linha a linha):
+
+```sql
+-- @analistas = 'ana;bruno;carla'  (split por XML, robusto entre versões do SQL Server)
+;WITH lista AS (
+    SELECT LTRIM(RTRIM(x.value('.', 'VARCHAR(100)'))) AS analista,
+           ROW_NUMBER() OVER (ORDER BY (SELECT 1)) AS r
+    FROM (SELECT CAST('<i>' + REPLACE(@analistas, ';', '</i><i>') + '</i>' AS XML) AS n) t
+    CROSS APPLY n.nodes('/i') AS y(x)
+),
+casos AS (
+    SELECT id, NTILE((SELECT COUNT(*) FROM lista)) OVER (ORDER BY data_abertura) AS balde
+    FROM casos_pendentes WHERE analista IS NULL
+)
+UPDATE c SET c.analista = l.analista
+FROM casos_pendentes c
+JOIN casos ca ON ca.id = c.id
+JOIN lista l  ON l.r  = ca.balde;
+```
 
 ## Stack
 
